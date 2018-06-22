@@ -1,3 +1,4 @@
+#from numba import jit
 import numpy as np
 import healpy as hp
 
@@ -189,10 +190,10 @@ def Loop(grid,B_rho,B_phi,B_z,parms={},
 
     loop_profile(grid,B_rho,B_phi,B_z,parm_dict)
 
-
+#@jit
 def loop_profile(grid,B_rho,B_phi,B_z,parm):
 
-#    print parm
+    print parm
 
     b_0 = np.array(parm['B_0'])*1e-6
 
@@ -241,6 +242,8 @@ def loop_profile(grid,B_rho,B_phi,B_z,parm):
            + np.sin(gthe)*np.sin(gphi)*y
            + np.cos(gthe)*z)/r_out
 
+    print "the0=",the0*180/np.pi," phi0=",phi0*180/np.pi
+
     # Rotate x,y,z 
     x1 = x*np.cos(phi0) - y*np.sin(phi0)
     y1 = x*np.sin(phi0) + y*np.cos(phi0)
@@ -249,8 +252,11 @@ def loop_profile(grid,B_rho,B_phi,B_z,parm):
     z2 = y1*np.sin(the0) + z*np.cos(the0)
 
     # local the phi
-    the = np.arcsin(x1/r)
-    phi = np.arctan2(y2,z2)
+#    the = np.arcsin(x1/r)
+#    phi = np.arctan2(y2,z2)
+
+    the = np.arcsin(z2/r)
+    phi = np.arctan2(y2,x1)
 
     # Local Bx, By, Bz
     bx = Bmag*np.cos(the)
@@ -264,8 +270,9 @@ def loop_profile(grid,B_rho,B_phi,B_z,parm):
     Bx = bx*np.cos(-phi0) - By1*np.sin(-phi0)
     By = bx*np.sin(-phi0) + By1*np.cos(-phi0)
 
-    # Gobal phi
-    phi = np.arctan2(coord[1][flg],coord[0][flg])
+    # Global phi
+    phi = np.arctan2(coord[0][flg],coord[1][flg])
+    phi *= 0
 
     # Finally rotate Bx,By to Brho and Bphi
 

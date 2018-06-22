@@ -14,13 +14,13 @@ import healpy as hp
 
 pi = np.pi
 
-class Sun():
+class Sun(object):
     def __init__(self,x=-8.5,y=0.0,z=0.0):
         self.x = x
         self.y = y
         self.z = z
 
-class Grid():
+class Grid(object):
     def __init__(self,NSIDE=64,radial_step=0.2,radial_max=20.0,sun=Sun()):
         """
         Build a grid of xyz points

@@ -1,3 +1,4 @@
+#from numba import jit
 import numpy as np
 import healpy as hp
 from Pynchro.Integrator import CGS
@@ -62,7 +63,7 @@ def Loop(grid,Nden,parms={},
 
     loop_profile(grid,Nden,parm_dict)
 
-
+#@jit
 def loop_profile(grid,Nden,parm):
 
 #    print parm

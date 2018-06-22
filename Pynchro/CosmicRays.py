@@ -19,12 +19,15 @@ class CRE():
         """
 
         grid = self.grid
+        self.zero()
         Ndensity = self.Ndensity
 
         for key,value in dict.iteritems():
             if prof.has_profile(key):
                 prof.apply_profile(key,grid,Ndensity,value)
 
+    def zero(self):
+        self.Ndensity *= 0.0
 
     def regrid_xy(self,xy,z=0.0,Bval='mag'):
         from scipy.interpolate import griddata
