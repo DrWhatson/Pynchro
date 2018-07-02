@@ -1,0 +1,173 @@
+import numpy as np
+import healpy as hp
+
+
+class CGS():
+    self.C_light = 2.99792458e+10  #cm/sec
+    self.qe = 4.80320425e-10 #
+    self.eV = 1.60217733e-12 #ergs
+    self.GeV = 1.e9 * self.eV
+    self.MEC2 = 0.51099907e-3 * self.GeV
+    self.ME = self.MEC2 /(self.C_light*self.C_light)
+    self.MEC = self.MEC2/self.C_light
+
+
+
+###########################  SYNCHROTRON EMISION  ##########################
+
+def dIQU_sync(cre,bmag,nu):
+    """
+    FUNCTION
+
+        === dIQU_sync : generate elemental IQU Stokes from synchrotron ===
+
+    dIQU_sync(cre,bmag)
+
+    From a profile of relativistic electrons, relevant quantities of Galactic
+    magnetic field and emission parameters, this function computes the
+    elemental contribution to I,Q,U of polarized synchrotron emission as
+    given by:
+        " dI = e_sync * rel_elect_profile
+                      * (transverseBfield**2)**((s+1)/4) * dl
+        " dQ = dI * p_sync * cos(2*gamma)
+        " dU = dI * p_sync * sin(2*gamma)
+
+            where " p_sync = (s+1)/(s+7/3) (s=3 usually)
+                  " transverseBfield**2 = B_theta**2 + B_phi**2
+                      with B_theta and B_phi the spherical components of
+                      the Bfield, so transverse to the line of sight.
+
+
+    Created on Oct 28 2016
+    Based on get_dIQU_sync.py written on Jul 7 2016
+
+    @author: V.Pelgrims
+    """
+
+    s_sync = cre.spec_index
+    p_sync = (s_sync + 1.)/(s_sync + 7./3.)
+
+    ### HERE WE GO
+    #intensity
+    dI = (default_setting['e_sync']
+          * re_profile * Transv_Bf**((s_sync+1.)/4.))
+
+    #Q Stokes
+    dQ = dI * p_sync * np.cos(2*Gamma_Bf)
+    #U Stokes
+    dU = dI * p_sync * np.sin(2*Gamma_Bf)
+
+    #it is done
+    return dI,dQ,dU
+
+
+
+def IQU_sync(re_density,Trans_Bf,Gamma_Bf,*args,**kwargs):
+    """
+    FUNCTION
+
+    === IQU_SYNC: generate integrated IQU Stokes from synchrotron ===
+
+    IQU_sync(rel_elect_density,
+             Btransverse_sq,
+             Gamma_Bf,
+             *args{NPIX,
+                   r_sampling_length,
+                   step_r_sampling},
+             **kwargs{e_sync,
+                      s_sync})
+
+    From a relativistic electron density profile, the squared transverse norm
+    of the Galactic B field, the elemental polarization position angle, the
+    NPIX parameter of the HEALPix map, the number of step and the step value
+    for radial integration and some other parameters,
+    this functions evaluates the integrated values of the Stokes I Q and U
+    parameters from the Galactic synchrotron as:
+        " I = sum along los of (dI = e_sync * rel_elect_profile
+                      * (transverseBfield**2)**((s+1)/4) * dl)
+        " Q = sum along los of (dQ = dI * p_sync * cos(2*gamma))
+        " U = sum along los of (dU = dI * p_sync * sin(2*gamma))
+
+    The integration is peformed as being simply the sum of the element along
+    the same line of sight (linear discretization) times the length of the
+    discretization interval.
+    This is the most stupid integration one can imagine.
+
+
+    INPUT:
+    ------
+     - rel_elect_profile : (npts,)-array with relativistic electron density
+
+     - transverseBfield_sq: (npts,)-array with the square of the norm of
+                            the transverse component of the Bfield
+
+     - Gamma_Bf : (npts,)-array with values of the local polarization
+                  position angle -- at 90 degree away from the projected B
+                  vector field on the polarization plane
+
+     *args:
+       - NPIX : NPIX parameter of HEALPix map
+                Default = 49152 = hp.nside2npix(64)
+
+       - r_sampling_length : number of step along the line of sight
+                             Default = 100
+
+       - step_r_sampling : value of the interval of radial discretization
+                           Default = 0.2 kpc
+
+     **kwargs:
+        - Same as for the function dIQU_sync()
+
+
+    OUTPUT:
+    -------
+     - I : integrated Stokes I
+     - Q : integrated Stokes Q
+     - U : integrated Stokes U
+
+         They are (NPIX,)-arrays
+
+
+    Created on Oct 27 2016
+    Based on get_IQU_dust.py written on Sep 6 2016
+
+    @author: V.Pelgrims
+    """
+
+    Npix = 49152
+    stepR = 0.2
+    rSize = 100
+    if len(args) >= 1:
+        Npix = args[0]
+        if len(args) ==3:
+            rSize = args[1]
+            stepR = args[2]
+
+    ### HERE WE GO
+    dI,dQ,dU = dIQU_sync(re_density,
+                         Trans_Bf,
+                         Gamma_Bf,
+                         **kwargs)
+
+    I = np.sum(np.reshape(dI,[rSize,Npix]),axis=0)*stepR
+    Q = np.sum(np.reshape(dQ,[rSize,Npix]),axis=0)*stepR
+    U = np.sum(np.reshape(dU,[rSize,Npix]),axis=0)*stepR
+
+    return I,Q,U
+
+
+def get_emissivity_t(cre,bmag,nu):
+
+    norm = cre. *np.sqrt(3) *CGS.qe**3 * np.abs(Bper)/(2.*CGS.MEC2)
+
+    // synchrotron integration
+    A = 4.*CGS.MEC*np.pi*nu/(3.*CGS.qe*np.abs(Bper))
+    mu = -0.5*(3.+index)
+    emiss_t =  norm * A**(0.5*(index+1)) * 2**(mu+1) 
+    emiss_t *= gsl_sf_gamma(0.5*mu+7./3.)*gsl_sf_gamma(0.5*mu+2./3.)/(mu+2.) )/(4.*np.pi)
+
+    return emiss_t
+
+
+
+
