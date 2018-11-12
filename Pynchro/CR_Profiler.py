@@ -85,7 +85,7 @@ def loop_profile(grid,Nden,parm):
     r = np.sqrt(np.sum(xyz*xyz,axis=0))
     nb = Nden.shape[0]
 
-#    print "N_0",N_0
+    print "N_0",N_0
 #    print "Coord shape",coord.shape
 #    print "r_in",r_in
 #    print "r_out",r_out
@@ -145,7 +145,7 @@ def Rexp_Zsech2(grid,Nden,parms={},
 
     N_0 = flux_norm(J_0,E_0,-alpha)
 
-#    print "N_0 = ",N_0
+    print "N_0 = ",N_0
 
     Nden += N_0 * np.exp(-r/r_scale)/np.cosh(xyz[2]/z_scale)/np.cosh(xyz[2]/z_scale)
 
@@ -178,8 +178,10 @@ def RING(grid, Nden, parms={},
     flg = np.where(r>r_in,1,0)
     flg *= np.where(r<r_ex,1,0)
     flg = np.compress(flg,np.arange(nb))
+ 
+    print "Mean Nden in outer ring =",Nden[flg] 
 
-    Nden[flg] += N_0
+    Nden[flg] = N_0
 
 
 

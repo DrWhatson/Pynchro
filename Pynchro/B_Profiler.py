@@ -69,7 +69,8 @@ def ASS(grid, B_rho, B_phi, B_z, parms={},
     pitch = 11.5,
     rho_0 = 8.5,
     Xi_0 = 25.0,
-    z_0 = 1.0):
+    z_0 = 1.0,
+    R_c = 5.0):
 
     parm_dict = {'B_0':B_0,
                  'B_amp_parm':B_amp_param,
@@ -77,7 +78,8 @@ def ASS(grid, B_rho, B_phi, B_z, parms={},
                  'pitch':pitch,
                  'rho_0':rho_0,
                  'Xi_0':Xi_0,
-                 'z_0':z_0}
+                 'z_0':z_0,
+                 'R_c':R_c}
 
     parm_keys = parm_dict.keys()
 
@@ -88,7 +90,7 @@ def ASS(grid, B_rho, B_phi, B_z, parms={},
             else:
                 print "Unrecognized ASS parmeter %s" % key_p
 
-    B_0 = parm_dict['B_0']
+    B_0 = parm_dict['B_0']*1e-6
     B_amp_parm = parm_dict['B_amp_parm']
     B_amp_type = parm_dict['B_amp_type']
     pitch = parm_dict['pitch']*np.pi/180.
@@ -103,11 +105,22 @@ def ASS(grid, B_rho, B_phi, B_z, parms={},
 
     if B_amp_type == 'cst':
         B_amp = B_0
+
     elif B_amp_type == 'cyl':
         B_0 = B_0 * (1. + rho_0/B_amp_param)
         B_amp = B_0 * 1./(1. + r/B_amp_param)
+
     elif B_amp_type == 'sph':
         B_amp = (B_0 * np.exp(-((r**2 + xyz[2]**2)**.5 - rho_0)/B_amp_param))
+
+    elif B_amp_type == 'sun':
+        rho = np.sqrt(xyz[0]**2+xyz[1]**2)
+        B_amp = np.zeros(len(rho),dtype='float')
+        flg = np.where(rho<=R_c)
+        B_amp[flg] = B_0 * np.exp(- np.abs(xyz[2][flg])/z_0)
+        flg = np.where(rho>R_c)
+        B_amp[flg] = B_0 * np.exp(-(rho[flg]-8.5)/rho_0 - np.abs(xyz[2][flg])/z_0)
+
     else:
         raise ValueError('''
         Bad entry for optional argument 'B_amp_type'.
@@ -122,15 +135,12 @@ def ASS(grid, B_rho, B_phi, B_z, parms={},
     B_phi += B_amp * np.cos(pitch) * np.cos(Xi_z)
     B_z += B_amp * np.sin(Xi_z)
 
+def RING_multipler(grid,B_rho, B_phi, B_z, parms={},
+    radii = [2.,5.],
+    facts = [1.]):
 
-def RING(grid, B_rho, B_phi, B_z, parms={},
-    B_0 = 2.0,
-    rho_in = 2.,
-    rho_ex = 5.):
-
-    parm_dict = {'B_0':B_0,
-                 'rho_in':rho_in,
-                 'rho_ex':rho_ex}
+    parm_dict = {'radii':radii,
+                 'factors':facts}
 
     parm_keys = parm_dict.keys()
 
@@ -139,7 +149,44 @@ def RING(grid, B_rho, B_phi, B_z, parms={},
             if key_p in parm_keys:
                 parm_dict[key_p] = val_p
             else:
-                print "Unrecognized ASS parmeter %s" % key_p
+                print "Unrecognized RING_multipler parmeter %s" % key_p
+
+    radii = parm_dict['radii']
+    facts = parm_dict['factors']
+
+    xyz = grid.get_cartesian()
+    r = np.sqrt(np.sum(xyz*xyz,axis=0))
+    nb = len(r)
+
+    for i in np.arange(len(facts)):
+        flg = np.where(r>radii[i],1,0)
+        flg *= np.where(r<radii[i+1],1,0)
+        flg = np.compress(flg,np.arange(nb))
+
+        B_rho[flg] *= facts[i]
+        B_phi[flg] *= facts[i]
+        B_z[flg] *= facts[i]
+
+
+def RING(grid, B_rho, B_phi, B_z, parms={},
+    B_0 = 2.0,
+    rho_in = 2.,
+    rho_ex = 5.,
+    mode = 'add'):
+
+    parm_dict = {'B_0':B_0,
+                 'rho_in':rho_in,
+                 'rho_ex':rho_ex,
+                 'mode':mode}
+
+    parm_keys = parm_dict.keys()
+
+    for loop in parms:
+        for key_p,val_p in loop.iteritems():
+            if key_p in parm_keys:
+                parm_dict[key_p] = val_p
+            else:
+                print "Unrecognized RING parmeter %s" % key_p
 
     B_0 = parm_dict['B_0']*1e-6 # uG
     rho_in = parm_dict['rho_in']
@@ -153,7 +200,10 @@ def RING(grid, B_rho, B_phi, B_z, parms={},
     flg *= np.where(r<rho_ex,1,0)
     flg = np.compress(flg,np.arange(nb))
 
-    B_phi[flg] += B_0
+    if mode=='add':
+        B_phi[flg] += B_0
+    elif mode=='overwrite':
+        B_phi[flg] = B_0
 
 
 
@@ -201,8 +251,8 @@ def loop_profile(grid,B_rho,B_phi,B_z,parm):
     r_out = parm['r_outer']
     loopCentre = parm['loopCentre']
 
-    the0 = parm['the']*np.pi/180.  # Direction of magnetic field
-    phi0 = parm['phi']*np.pi/180.
+    the0 = np.pi/2-parm['the']*np.pi/180.  # Direction of magnetic field
+    phi0 = np.pi/2+parm['phi']*np.pi/180.
 
     dB = np.array(parm['dB'])*1e-6 # Magnitude of mag field gradient
     gthe = parm['gthe']*np.pi/180. # Direction of gradient in magnetic field
@@ -216,8 +266,10 @@ def loop_profile(grid,B_rho,B_phi,B_z,parm):
     r = np.sqrt(np.sum(xyz*xyz,axis=0))
     nb = B_z.shape[0]
 
-#    print "r_in",r_in
-#    print "r_out",r_out
+    print
+    print "r_in",r_in
+    print "r_out",r_out
+  
 #    print "the0",the0
 #    print "phi0",phi0
    
@@ -249,35 +301,37 @@ def loop_profile(grid,B_rho,B_phi,B_z,parm):
     y1 = x*np.sin(phi0) + y*np.cos(phi0)
 
     y2 = y1*np.cos(the0) - z*np.sin(the0)
-    z2 = y1*np.sin(the0) + z*np.cos(the0)
+    z1 = y1*np.sin(the0) + z*np.cos(the0)
 
     # local the phi
-#    the = np.arcsin(x1/r)
-#    phi = np.arctan2(y2,z2)
 
-    the = np.arcsin(z2/r)
+    the = np.arcsin(z1/r)
     phi = np.arctan2(y2,x1)
 
     # Local Bx, By, Bz
-    bx = Bmag*np.cos(the)
-    by = Bmag*np.sin(the)*np.sin(phi)
-    bz = Bmag*np.sin(the)*np.cos(phi)
+    bx = -Bmag*np.sin(the)*np.sin(phi)
+    by = -Bmag*np.sin(the)*np.cos(phi)
+    bz =  Bmag*np.cos(the)
 
     # Rotate back
-    By1 = by*np.cos(-the0) - bz*np.sin(-the0)
-    Bz = by*np.sin(-the0) + bz*np.cos(-the0)
+    bx1  = bx*np.cos(-the0) - bz*np.sin(-the0)
+    Bz  = bx*np.sin(-the0) + bz*np.cos(-the0)
 
-    Bx = bx*np.cos(-phi0) - By1*np.sin(-phi0)
-    By = bx*np.sin(-phi0) + By1*np.cos(-phi0)
+    Bx = (bx1*np.cos(phi0) - by*np.sin(phi0))
+    By = bx1*np.sin(phi0) + by*np.cos(phi0)
+
 
     # Global phi
-    phi = np.arctan2(coord[0][flg],coord[1][flg])
-    phi *= 0
+    phi = -np.arctan2(coord[1][flg],coord[0][flg])
+
+    print "Phi shape=",phi.shape
+
+#    print "max min phi ",np.max(phi),np.min(phi)
 
     # Finally rotate Bx,By to Brho and Bphi
 
-    B_rho[flg] += Bx*np.cos(phi) - By*np.sin(phi)
-    B_phi[flg] += Bx*np.sin(phi) + By*np.cos(phi)
+    B_rho[flg] += By*np.cos(phi) - Bx*np.sin(phi)
+    B_phi[flg] += By*np.sin(phi) + Bx*np.cos(phi)
     B_z[flg] += Bz
 
     return
@@ -375,4 +429,4 @@ def __B0_of_r(rho,z,**kwargs):
 
 
 
-profiles = {'Loop':Loop,'Fixed':Fixed, 'ASS':ASS, 'RING':RING}
+profiles = {'Loop':Loop,'Fixed':Fixed, 'ASS':ASS, 'RING':RING, 'RING_multipler':RING_multipler}

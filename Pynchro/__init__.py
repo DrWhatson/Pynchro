@@ -37,7 +37,7 @@ class Grid(object):
 
         self.Npix = NPIX
         self.rSize = rSize
-
+        self.ipix = np.arange(NPIX)
 
         #unit pointing vectors
         xyz_n = np.asarray(hp.pix2vec(NSIDE,np.arange(NPIX)))
@@ -57,6 +57,28 @@ class Grid(object):
 
         self.__ifBfield()
 
+    def add_warp(self, r1=8.5, r2=15.0, psi2=20.0, alpha=2, phi1=150, phi2=220, mode='cos'):
+        r = np.sqrt(self.XYZ_gal[0]**2 + self.XYZ_gal[1]**2)
+        r = np.where(r>r2,r2,r)
+        flg = np.where(r>r1)[0]
+        phi = np.arctan2(self.XYZ_gal[1][flg],self.XYZ_gal[0][flg])
+
+        psi2 *= np.pi/180
+        phi1 *= np.pi/180
+
+        psi = psi2 * ((r[flg]-r1)/(r2-r1))**alpha
+        psi = np.where(psi>psi2,psi2,psi)
+
+        if mode=='cos':
+            dz = np.tan(psi) * r[flg] * np.cos(phi-phi1)
+        elif mode=='2gauss':
+            g1 = np.exp(-(phi-phi1)**2*2)
+            g2 = np.exp(-(phi-phi2)**2*2)
+            dz = np.tan(psi) * r[flg] * (g1-g2)
+ 
+        self.XYZ_gal[2][flg] -= dz
+
+ 
 
     def get_n_coords(self):
         return self.XYZ_gal.shape[1]
@@ -138,7 +160,7 @@ class Grid(object):
         u_phi = np.array([-Sphi, Cphi, np.zeros(Cphi.size)])
 
         return u_r, u_theta, u_phi
-
+   
 
 class Grid_cone(Grid):
     def __init__(self,NSIDE=64,radial_step=0.2,radial_max=20.0,sun=Sun(),
@@ -271,7 +293,50 @@ class Grid_list(Grid):
         self._Grid__ifBfield()
 
 
-def plot_galactic_xy_slice(val,xrange=(-20,20),yrange=(-20,20),step=0.05,Bval='Bmag'):
+class RectGrid(object):
+    def __init__(self,xrange=(-20,20),yrange=(-20,20),zrange=(-5,5),nx=100,ny=100,nz=25,sun=Sun()):
+        """
+        Build a rectangular grid of xyz points with view to export B-field
+        """
+
+        self.sun = sun        
+
+        x = np.linspace(xrange[0],xrange[1],nx)
+        y = np.linspace(yrange[0],yrange[1],ny)
+        z = np.linspace(zrange[0],zrange[1],nz)
+
+        X,Y,Z = np.meshgrid(x,y,z)
+
+        self.XYZ_gal = np.asarray([X.ravel(),Y.ravel(),Z.ravel()])
+
+        self.XYZ_sun = (self.XYZ_gal -
+               np.tile(np.array([sun.x,sun.y,sun.z]),(nx*ny*nz,1)).T)
+
+    def add_warp(self, r1=8.5, r2=15.0, psi2=20.0, alpha=2, phi1=150):
+        r = np.sqrt(self.XYZ_gal[0]**2 + self.XYZ_gal[1]**2)
+        r = np.where(r>r2,r2,r)
+        flg = np.where(r>r1)[0]
+        phi = np.arctan2(self.XYZ_gal[1][flg],self.XYZ_gal[0][flg])
+
+        psi2 *= np.pi/180
+        phi1 *= np.pi/180
+
+        psi = psi2 * ((r[flg]-r1)/(r2-r1))**alpha
+        psi = np.where(psi>psi2,psi2,psi)
+
+        dz = np.tan(psi) * r[flg] * np.cos(phi-phi1)
+        self.XYZ_gal[2][flg] -= dz
+
+    def get_n_coords(self):
+        return self.XYZ_gal.shape[1]
+
+    def get_cartesian(self):
+        return self.XYZ_gal
+        
+
+def plot_galactic_xy_slice(
+    val,xrange=(-20,20),yrange=(-20,20),step=0.05,
+    Bval='Bmag',z=0.0,vmin=None,vmax=None):
 
     import matplotlib.pyplot as plt
     import matplotlib
@@ -281,7 +346,14 @@ def plot_galactic_xy_slice(val,xrange=(-20,20),yrange=(-20,20),step=0.05,Bval='B
     X,Y = np.meshgrid(x,y)
     XY = np.asarray([X.ravel(),Y.ravel()])
 
-    vals_regrid = val.regrid_xy(XY,Bval=Bval)
+    vals_regrid = val.regrid_xy(XY,Bval=Bval,z=z)
+
+    if vmin==None:
+        vmin = np.min(vals_regrid)
+
+    if vmax==None:
+        vmax = np.max(vals_regrid)
+
 
 #    print XY.shape, vals_regrid.shape
 
@@ -290,7 +362,8 @@ def plot_galactic_xy_slice(val,xrange=(-20,20),yrange=(-20,20),step=0.05,Bval='B
     plt.figure()
     plt.imshow(np.reshape(vals_regrid,[len(y),len(x)]),
                extent=limites,
-               origin='lower')
+               origin='lower',
+               vmin=vmin,vmax=vmax)
 #               norm=matplotlib.colors.LogNorm(vmin=5.0e-3,
 #                                              vmax=1.1))
     plt.axis(limites)
@@ -301,7 +374,9 @@ def plot_galactic_xy_slice(val,xrange=(-20,20),yrange=(-20,20),step=0.05,Bval='B
     plt.ylabel('$Y$ [kpc]',fontsize=18)
     plt.show()
 
-def plot_galactic_xz_slice(val,xrange=(-20,20),zrange=(-5,5),step=0.05,Bval='Bmag'):
+def plot_galactic_xz_slice(val,xrange=(-20,20),zrange=(-5,5),step=0.05,
+    Bval='Bmag',lon=0,
+    vmin=None, vmax=None):
 
     import matplotlib.pyplot as plt
     import matplotlib
@@ -311,7 +386,13 @@ def plot_galactic_xz_slice(val,xrange=(-20,20),zrange=(-5,5),step=0.05,Bval='Bma
     X,Z = np.meshgrid(x,z)
     XZ = np.asarray([X.ravel(),Z.ravel()])
 
-    vals_regrid = val.regrid_xz(XZ,Bval=Bval)
+    vals_regrid = val.regrid_xz(XZ,Bval=Bval,lon=lon)
+
+    if vmin==None:
+        vmin = np.min(vals_regrid)
+
+    if vmax==None:
+        vmax = np.max(vals_regrid)
 
 #    print XZ.shape, vals_regrid.shape
 
@@ -319,8 +400,8 @@ def plot_galactic_xz_slice(val,xrange=(-20,20),zrange=(-5,5),step=0.05,Bval='Bma
     limites = [x.min(),x.max(),z.min(),z.max()]
     plt.figure()
     plt.imshow(np.reshape(vals_regrid,[len(z),len(x)]),
-               extent=limites,
-               origin='lower')
+               extent=limites,origin='lower',
+               vmin=vmin, vmax=vmax)
     #           norm=matplotlib.colors.LogNorm(vmin=5.0e-3,vmax=1.1))
 
     plt.axis(limites)

@@ -78,6 +78,18 @@ def IQU_sync(bmag, cre, nu):
     return I,Q,U
 
 
+#def Extinction(vis, ext):
+
+#    Npix = bmag.grid.Npix
+#    stepR = bmag.grid.radial_step
+#    rSize = bmag.grid.rSize
+
+    # Go from outer shell inwards
+
+#    for i in np.arange(rSize):
+#        I = vis.
+
+
 def expand_partial_healpix(ppix, grid):
     NPIX = hp.nside2npix(grid.NSIDE)
     pix = np.zeros(NPIX,dtype='double')
